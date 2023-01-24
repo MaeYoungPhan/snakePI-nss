@@ -68,4 +68,14 @@ insert into Snakes (id, name, owner_id, species_id, gender, color) values (28, '
 insert into Snakes (id, name, owner_id, species_id, gender, color) values (29, 'Stéphanie', 8, 5, 'Female', 'Purple');
 insert into Snakes (id, name, owner_id, species_id, gender, color) values (30, 'Liè', 7, 1, 'Female', 'Maroon');
 
-SELECT * FROM snakes
+SELECT * FROM Snakes ORDER BY id DESC
+
+SELECT
+	s.id,
+	s.name,
+	s.owner_id,
+	s.species_id,
+	s.gender,
+	s.color
+FROM Snakes s
+WHERE s.species_id = 5

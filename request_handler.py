@@ -1,13 +1,40 @@
 from urllib.parse import urlparse, parse_qs
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from views import (get_all_owners, get_all_snakes, get_all_species, get_single_owner, 
-get_single_snake, get_single_species)
+from views import (all, single, get_snakes_by_species, create_snake)
 
+
+method_mapper = {
+    'single': single, 'all': all
+}
 
 class HandleRequests(BaseHTTPRequestHandler):
     """Controls the functionality of any GET, PUT, POST, DELETE requests to the server
     """
+    def get_all_or_single(self, resource, id):
+        """Determines whether the client is needing all items or a single item and then calls the correct function.
+        """
+        if id is not None:
+            response = method_mapper["single"](resource, id)
+
+            if response is None:
+                self._set_headers(404)
+                response = ''
+            elif response == '':
+                self._set_headers(405)
+            else:
+                self._set_headers(200)
+        else:
+            response = method_mapper["all"](resource)
+
+            if response is not None:
+                self._set_headers(200)
+            else:
+                self._set_headers(404)
+                response = ''
+
+        return response
+
     def parse_url(self, path):
         """Parse the url into the resource and id"""
         parsed_url = urlparse(path)
@@ -28,58 +55,22 @@ class HandleRequests(BaseHTTPRequestHandler):
     def do_GET(self):
         """Handles GET requests to the server
         """
-
-        response = {}
-
-        if response is not None:
-            self._set_headers(200)
-        else:
-            self._set_headers(404)
-            response = ''
-
         # Parse URL and store entire tuple in a variable
         parsed = self.parse_url(self.path)
 
-        # If the path does not include a query parameter, continue with the original if block
         if '?' not in self.path:
-            ( resource, id ) = parsed
-
-            if resource == "species":
-                if id is not None:
-                    response = get_single_species(id)
-                else:
-                    response = get_all_species()
-            
-            elif resource == "owners":
-                if id is not None:
-                    response = get_single_owner(id)
-                else:
-                    response = get_all_owners()
-            
-            elif resource == "snakes":
-                if id is not None:
-                    response = get_single_snake(id)
-                else:
-                    response = get_all_snakes()
+            response = None
+            (resource, id) = parsed
+            response = self.get_all_or_single(resource, id)
 
         else: # There is a ? in the path, run the query param functions
+            response = {}
             (resource, query) = parsed
 
-            # see if the query dictionary has an email key
-            if query.get('email') and resource == 'customers':
-                response = get_customers_by_email(query['email'][0])
-
-            # see if the query dictionary has an location_id key and employee request
-            elif query.get('location_id') and resource == 'employees':
-                response = get_employees_by_location(query['location_id'][0])
-
-            # see if the query dictionary has an location_id key and animal request
-            elif query.get('location_id') and resource == 'animals':
-                response = get_animals_by_location(query['location_id'][0])
-
-            # see if the query dictionary has an location_id key and animal request
-            elif query.get('status') and resource == 'animals':
-                response = get_animals_by_status(query['status'][0])
+            # see if the query dictionary has a species key
+            if query.get('species') and resource == 'snakes':
+                self._set_headers(200)
+                response = get_snakes_by_species(query['species'][0])
 
         self.wfile.write(json.dumps(response).encode())
 
@@ -88,18 +79,50 @@ class HandleRequests(BaseHTTPRequestHandler):
     def do_POST(self):
         """Handles POST requests to the server"""
 
-        # Set response code to 'Created'
-        self._set_headers(201)
-
+    # Set response code to 'Created'
         content_len = int(self.headers.get('content-length', 0))
         post_body = self.rfile.read(content_len)
-        response = { "payload": post_body }
-        self.wfile.write(json.dumps(response).encode())
+
+        # Convert JSON string to a Python dictionary
+        post_body = json.loads(post_body)
+
+        # Parse the URL
+        (resource, id) = self.parse_url(self.path)
+
+        if resource == "snakes":
+            new_snake = None
+
+            if ("name" in post_body and "ownerId" in post_body and "speciesId" in post_body
+            and "gender" in post_body and "color" in post_body):
+                self._set_headers(201)
+                new_snake = create_snake(post_body)
+
+            else:
+                self._set_headers(400)
+
+                new_snake = {
+                "message": f'{"name is required"}' if "name" not in post_body else "" f'{"ownerId is required"}' if "ownerId" not in post_body else ""
+                f'{"speciesId is required"}' if "speciesId" not in post_body else "" f'{"gender is required"}' if "gender" not in post_body else ""
+                f'{"color is required"}' if "color" not in post_body else ""}
+            
+        else:
+            self._set_headers(404)
+            new_snake = ''
+
+        self.wfile.write(json.dumps(new_snake).encode())
 
     # A method that handles any PUT request.
     def do_PUT(self):
         """Handles PUT requests to the server"""
-        self.do_PUT()
+        self._set_headers(404)
+        response = ''
+
+        self.wfile.write(json.dumps(response).encode())
+
+    # A method that handles any DELETE request.
+    def do_DELETE(self):
+        """Handles DELETE requests to the server"""
+        self._set_headers(404)
 
     def _set_headers(self, status):
         # Notice this Docstring also includes information about the arguments passed to the function
